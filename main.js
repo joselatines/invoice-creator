@@ -2,58 +2,6 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
-const isDevEnvironment = process.env.NODE_ENV !== 'production';
-
-// menu template
-const templateMenu = [
-	{
-		label: 'File',
-		submenu: [
-			{
-				label: 'New Product',
-				accelerator: 'Ctrl+N',
-				click() {},
-			},
-			{
-				label: 'Remove All Products',
-				click() {},
-			},
-			{
-				label: 'Exit',
-				accelerator: process.platform == 'darwin' ? 'command+Q' : 'Ctrl+Q',
-				click() {
-					app.quit();
-				},
-			},
-		],
-	},
-];
-
-if (isDevEnvironment) {
-	// reload app on changes
-	/* 	require('electron-reload')(__dirname, {
-		// reload on changes in .js files
-		electron: path.join(__dirname, '../node_modules', '.bin', 'electron'),
-	});
- */
-	// devTools
-	templateMenu.push({
-		label: 'DevTools',
-		submenu: [
-			{
-				label: 'Show/Hide Dev Tools',
-				accelerator: process.platform == 'darwin' ? 'Comand+D' : 'Ctrl+D',
-				click(item, focusedWindow) {
-					focusedWindow.toggleDevTools();
-				},
-			},
-			{
-				role: 'reload',
-			},
-		],
-	});
-}
-
 function createWindow() {
 	// Create the browser window.
 	const mainWindow = new BrowserWindow({

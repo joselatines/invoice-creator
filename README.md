@@ -1,40 +1,29 @@
-# electron-quick-start
+# Invoice APP
 
-**Clone and run for a quick way to see Electron in action.**
+This simple app allows the user to create an invoice by filling in a form with customer and product information. The invoice is then generated and displayed on the page.
 
-This is a minimal Electron application based on the [Quick Start Guide](https://electronjs.org/docs/latest/tutorial/quick-start) within the Electron documentation.
+## Classes
 
-A basic Electron application needs just these files:
+The app contains three classes:
 
-- `package.json` - Points to the app's main file and lists its details and dependencies.
-- `main.js` - Starts the app and creates a browser window to render HTML. This is the app's **main process**.
-- `index.html` - A web page to render. This is the app's **renderer process**.
-- `preload.js` - A content script that runs before the renderer process loads.
+## Customer
 
-You can learn more about each of these components in depth within the [Tutorial](https://electronjs.org/docs/latest/tutorial/tutorial-prerequisites).
+Represents a customer and contains the following properties:
 
-## To Use
+clientName: the name of the customer
+idCard: the ID card number of the customer
 
-To clone and run this repository you'll need [Git](https://git-scm.com) and [Node.js](https://nodejs.org/en/download/) (which comes with [npm](http://npmjs.com)) installed on your computer. From your command line:
+## Invoice
 
-```bash
-# Clone this repository
-git clone https://github.com/electron/electron-quick-start
-# Go into the repository
-cd electron-quick-start
-# Install dependencies
-npm install
-# Run the app
-npm start
-```
+Represents an invoice and contains the following properties:
 
-Note: If you're using Linux Bash for Windows, [see this guide](https://www.howtogeek.com/261575/how-to-run-graphical-linux-desktop-applications-from-windows-10s-bash-shell/) or use `node` from the command prompt.
+customer: the customer associated with the invoice (an instance of the Customer class)
+products: an array of products associated with the invoice (instances of the Product class)
+date: the date the invoice was created
+total: the total amount of the invoice
+Product
+Represents a product and contains the following properties:
 
-## Resources for Learning Electron
-
-- [electronjs.org/docs](https://electronjs.org/docs) - all of Electron's documentation
-- [Electron Fiddle](https://electronjs.org/fiddle) - Electron Fiddle, an app to test small Electron experiments
-
-## License
-
-[CC0 1.0 (Public Domain)](LICENSE.md)
+name: the name of the product
+price: the price of the product
+qty: the quantity of the product
