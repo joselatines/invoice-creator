@@ -135,9 +135,9 @@ const printInvoice = invoice => {
 	const productRows = invoice.products.map(
 		product => `
     <tr>
-      <td>${product.qty}</td>
-      <td>${product.name}</td>
-      <td>${product.price}</td>
+      <td>$${product.qty}</td>
+      <td>$${product.name}</td>
+      <td>$${product.price}</td>
     </tr>
   `
 	);
@@ -165,7 +165,6 @@ const printInvoice = invoice => {
 		<div class="col-4 text-center">
 			<h2>Datos de empresa</h2>
 			<h3>Repuestos Moto Garcia</h3>
-			<p class="font-weight-bold">RIF: <p class="font-weight-normal">DTM3CG J-41287312-1</p></p>
 			<p class="font-weight-bold">Ubicación: <p class="font-weight-normal">Av Sucre a 100mts del Palacio de Miraflores</p></p>
 		</div>
 		<div class="col-4 text-right">
@@ -194,11 +193,11 @@ const printInvoice = invoice => {
 			<table class="table">
 				<tbody>
 					<tr>
-						<td><strong>Total USD: $${invoice.total}</strong></td>
+						<td><strong>TOTAL USD: $${invoice.total}</strong></td>
 						<td><span id="totalUSD"></span></td>
 					</tr>
 					<tr>
-						<td><strong>Total BS:</strong></td>
+						<td><strong>TOTAL BS:</strong></td>
 						<td><span id="totalBS"></span></td>
 					</tr>
 				</tbody>
@@ -307,7 +306,7 @@ const renderProducts = () => {
     <tr>
       <td>${product.qty}</td>
       <td>${product.name}</td>
-      <td>${product.price}</td>
+      <td>$${product.price}</td>
       <td>
         <button class="btn btn-warning editProduct" id="${product.id}">Edit</button>
         <button class="btn btn-danger deleteProduct" id="${product.id}">Delete</button>
