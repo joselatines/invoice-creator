@@ -6,23 +6,160 @@
  * to expose Node.js functionality from the main process.
  */
 
+const sqlite3 = require('sqlite3').verbose();
+// const db = new sqlite3.Database('db/clients.db');
+
+// utils
+const setDateFormat = (currentDate, format) => {
+	const map = {
+		dd: currentDate.getDate(),
+		mm: currentDate.getMonth() + 1,
+		yy: currentDate.getFullYear().toString().slice(-2),
+		yyyy: currentDate.getFullYear(),
+	};
+
+	return format.replace(/dd|mm|yy|yyy/gi, matched => map[matched]);
+};
+
 // classes
+export class DatabaseManager {
+	constructor(dbName) {
+		this._db = new sqlite3.Database(dbName);
+	}
+
+	async search(valueToSearch, keyToSearch, table) {
+		return new Promise((resolve, reject) => {
+			const query = `SELECT * FROM ${table} WHERE ${keyToSearch} LIKE ?`;
+			// Append % to valueToSearch to represent any number of characters
+			const searchValue = `%${valueToSearch}%`;
+			this._db.get(query, [searchValue], (err, res) => {
+				if (err) {
+					reject(err);
+				} else {
+					resolve(res);
+				}
+			});
+		});
+	}
+
+	// Function to create Customers and Invoices tables
+	createTables() {
+		this._db.serialize(() => {
+			// Create the "Customers" table
+			this._db.run(
+				`CREATE TABLE IF NOT EXISTS Customers (
+          ci TEXT UNIQUE NOT NULL,
+          full_name TEXT,
+          PRIMARY KEY("ci")
+        )`,
+				err => {
+					if (err) {
+						console.error(err);
+					} else {
+						console.log('Customers table created successfully');
+					}
+				}
+			);
+
+			// Create the "Invoices" table
+			this._db.run(
+				`CREATE TABLE IF NOT EXISTS Invoices (
+          id TEXT NOT NULL UNIQUE,
+          date TEXT,
+          products TEXT,
+          customer_ci TEXT,
+          FOREIGN KEY (customer_ci) REFERENCES Customers(ci),
+          PRIMARY KEY (id)
+        )`,
+				err => {
+					if (err) {
+						console.error(err);
+					} else {
+						console.log('Invoices table created successfully');
+					}
+				}
+			);
+		});
+	}
+
+	createCustomer(client) {
+		try {
+			const query = `INSERT INTO Customers (ci, full_name) VALUES (?, ?)`;
+			const ci = client.idCard;
+			const fullName = client.clientName;
+
+			const uniqueCiQuery = `SELECT COUNT(*) as count FROM Customers WHERE ci = ?`;
+			this._db.get(uniqueCiQuery, [ci], (err, res) => {
+				if (res.count > 0) {
+					console.log(
+						`Customer with ci ${ci} already exists in the database so is not created again`
+					);
+					return;
+				}
+
+				this._db.run(query, [ci, fullName]);
+
+				if (err) {
+					throw Error(err.message);
+				}
+			});
+		} catch (error) {
+			console.error(error);
+			console.error(error.message);
+		}
+	}
+
+	createInvoice(invoice) {
+		try {
+			const query = `INSERT INTO Invoices (id, date, customer_ci, products) VALUES (?, ?, ?, ?)`;
+			const id = invoice.id;
+			const date = invoice.date;
+			const customerCi = invoice.customerIdCard;
+			const products = invoice.products;
+			var productsTextFormat = '';
+			products.forEach(element => {
+				productsTextFormat += `PRODUCTO: ${element.name} - UND: ${element.qty} - PRECIO: $${element.price} \n`;
+			});
+
+			productsTextFormat += `TOTAL: $${invoice.total}`;
+
+			this._db.run(query, [
+				id,
+				date,
+				customerCi,
+				productsTextFormat,
+			]);
+		} catch (error) {
+			console.error(error);
+			console.error(error.message);
+		}
+	}
+}
+
+// Create an instance of DatabaseManager and call createTables() when the app is opened
+const db = new DatabaseManager('database.db');
+db.createTables();
+
 class Customer {
 	constructor(clientName, idCard) {
 		if (!idCard || idCard.length < 3) {
 			throw new Error('Cédula es requerido');
 		}
-		this._id = self.crypto.randomUUID();
+		// this._id = self.crypto.randomUUID();
 		this._clientName = clientName;
 		this._idCard = idCard;
 	}
 
 	get clientName() {
-		return this._capitalizeFirstLetter(this._clientName);
+		return this._clientName;
 	}
 
 	get idCard() {
 		return this._idCard;
+	}
+
+	get id() {
+		return this._id;
 	}
 
 	_capitalizeFirstLetter(string) {
@@ -39,21 +176,10 @@ class Invoice {
 		if (!date) {
 			const today = new Date();
 
-			const setDateFormat = (currentDate, format) => {
-				const map = {
-					dd: currentDate.getDate(),
-					mm: currentDate.getMonth() + 1,
-					yy: currentDate.getFullYear().toString().slice(-2),
-					yyyy: currentDate.getFullYear(),
-				};
-
-				return format.replace(/dd|mm|yy|yyy/gi, matched => map[matched]);
-			};
-
 			date = setDateFormat(today, 'dd/mm/yy');
 		}
 
-		this.id = self.crypto.randomUUID();
+		this._id = self.crypto.randomUUID();
 		this._customer = customer;
 		this._products = products;
 		this._date = date;
@@ -61,10 +187,19 @@ class Invoice {
 		this._calculateTotal();
 	}
 
+	get id() {
+		return this._id;
+	}
+
+	get customer() {
+		return this._customer;
+	}
+
 	get customerFullName() {
 		return this._customer.clientName;
 	}
 
+	// ci
 	get customerIdCard() {
 		return this._customer.idCard;
 	}
@@ -79,7 +214,7 @@ class Invoice {
 
 	_calculateTotal() {
 		this._products.forEach(product => {
-			this._total += product.price * product.qty;
+			this._total += +product.price;
 		});
 		return this._total;
 	}
@@ -123,118 +258,133 @@ let products = [];
 let invoiceDate = null;
 
 // DOM elements
-const customerForm = document.getElementById('customerForm');
 const productForm = document.getElementById('productForm');
 const errorsContainer = document.getElementById('errors');
 const invoiceContainer = document.getElementById('invoiceContainer');
+const checkBoxSaveDB = document.getElementById('saveInDB');
 const dateInput = document.getElementById('date');
-
+const customerIdCard = document.getElementById('customerIdCard');
+const customerButtonSuggestion = document.getElementById('customerSuggestion');
 const createOrderButton = document.getElementById('createOrder');
+const customerName = document.getElementById('customerName');
 
-const printInvoice = invoice => {
-	const productRows = invoice.products.map(
-		product => `
-    <tr>
-      <td>$${product.qty}</td>
-      <td>$${product.name}</td>
-      <td>$${product.price}</td>
-    </tr>
-  `
-	);
+const printInvoice = async invoice => {
+	try {
+		const productRows = invoice.products.map(
+			product => `
+			<tr>
+				<td>${product.qty}</td>
+				<td>${product.name}</td>
+				<td>$${product.price}</td>
+			</tr>
+		`
+		);
 
-	const productsTableHtml = `
-    <table class="table">
-      <thead>
-        <tr>
-          <th scope="col">UND</th>
-          <th scope="col">PRODUCTO</th>
-          <th scope="col">PRECIO</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${productRows.join('')}
-      </tbody>
-    </table>
-  `;
-
-	const invoiceHtml = `<div class="container">
-	<div class="row">
-		<div class="col-4">
-			<img src="./logo.jpg" alt="Moto Garcia Logo" width="100" height="100">
-		</div>
-		<div class="col-4 text-center">
-			<h2>Datos de empresa</h2>
-			<h3>Repuestos Moto Garcia</h3>
-			<p class="font-weight-bold">Ubicación: <p class="font-weight-normal">Av Sucre a 100mts del Palacio de Miraflores</p></p>
-		</div>
-		<div class="col-4 text-right">
-			<h5>Factura</h5>
-			<p>Fecha: <span id="invoiceDate">${invoice.date}</span></p>
-		</div>
-	</div>
-	<hr>
-	<div class="row">
-		<div class="col-6">
-			<h5>Información de cliente</h5>
-			<p class="font-weight-bold">Cliente: <span class="font-weight-normal" id="customerName">${invoice.customerFullName}</span></p>
-			<p class="font-weight-bold">Cédula: <span class="font-weight-normal" id="customerId">${invoice.customerIdCard}</span></p>
-		</div>
-	</div>
-	<br>
-	<div class="row">
-		<div class="col-12">
-		${productsTableHtml}
-		</div>
-	</div>
-	<div class="row">
-		<div class="col-6">
-		</div>
-		<div class="col-6">
+		const productsTableHtml = `
 			<table class="table">
+				<thead>
+					<tr>
+						<th scope="col">UND</th>
+						<th scope="col">PRODUCTO</th>
+						<th scope="col">PRECIO</th>
+					</tr>
+				</thead>
 				<tbody>
-					<tr>
-						<td><strong>TOTAL USD: $${invoice.total}</strong></td>
-						<td><span id="totalUSD"></span></td>
-					</tr>
-					<tr>
-						<td><strong>TOTAL BS:</strong></td>
-						<td><span id="totalBS"></span></td>
-					</tr>
+					${productRows.join('')}
 				</tbody>
 			</table>
-		</div>
-	</div>
-</div>`;
+		`;
 
-	const printWindow = window.open('', 'Print-Window');
-	printWindow.document.write(`
-    <html>
-      <head>
-			<title>Invoice</title>
-			<meta charset="utf-8">
-			<meta name="viewport" content="width=device-width, initial-scale=1">
-			<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-			<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-			<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
-			<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-			<style type="text/css">
-				body {
-					padding: 20px;
-				}
-			</style>
-      </head>
-      <body onload="window.print();window.close()">${invoiceHtml}</body>
-    </html>
-  `);
-	printWindow.document.close();
+		const invoiceHtml = `<div class="container">
+		<div class="row">
+			<div class="col-4">
+				<img src="./logo.jpg" alt="Moto Garcia Logo" width="100" height="100">
+			</div>
+			<div class="col-4 text-center">
+				<h2>Datos de empresa</h2>
+				<h3>Repuestos Moto Garcia</h3>
+				<p class="font-weight-bold">RIF: <p class="font-weight-normal">DTM3CG J-41287312-1</p></p>
+				<p class="font-weight-bold">Contacto: <p class="font-weight-normal">0414-9112993</p></p>
+				<p class="font-weight-bold">Ubicación: <p class="font-weight-normal">Av Sucre a 100mts del Palacio de Miraflores</p></p>
+			</div>
+			<div class="col-4 text-right">
+				<h5>Factura</h5>
+				<p>Fecha: <span id="invoiceDate">${invoice.date}</span></p>
+			</div>
+		</div>
+		<hr>
+		<div class="row">
+			<div class="col-6">
+				<h5>Información de cliente</h5>
+				<p class="font-weight-bold">Cliente: <span class="font-weight-normal" id="customerName">${invoice.customerFullName}</span></p>
+				<p class="font-weight-bold">Cédula: <span class="font-weight-normal" id="customerId">${invoice.customerIdCard}</span></p>
+			</div>
+		</div>
+		<br>
+		<div class="row">
+			<div class="col-12">
+			${productsTableHtml}
+			</div>
+		</div>
+		<div class="row">
+			<div class="col-6">
+			</div>
+			<div class="col-6">
+				<table class="table">
+					<tbody>
+						<tr>
+							<td><strong>TOTAL USD: $${invoice.total}</strong></td>
+							<td><span id="totalUSD"></span></td>
+						</tr>
+						<tr>
+							<td><strong>TOTAL BS:</strong></td>
+							<td><span id="totalBS"></span></td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</div>`;
+
+		const printWindow = window.open('', 'Print-Window');
+		printWindow.document.write(`
+			<html>
+				<head>
+				<title>Invoice</title>
+				<meta charset="utf-8">
+				<meta name="viewport" content="width=device-width, initial-scale=1">
+				<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+				<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+				<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+				<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+				<style type="text/css">
+					body {
+						padding: 20px;
+					}
+				</style>
+				</head>
+				<body onload="window.print();window.close()">${invoiceHtml}</body>
+			</html>
+		`);
+		printWindow.document.close();
+
+		if (checkBoxSaveDB.checked) {
+			db.createCustomer(invoice.customer); // create customer to db
+			db.createInvoice(invoice); // then create the invoice
+		}
+	} catch (error) {
+		errorsContainer.innerHTML = error.message;
+		console.error(error);
+	}
 };
 
 const setDate = e => {
 	e.preventDefault();
 
 	const date = e.target.value;
-	console.log(date)
-	invoiceDate = date;
+	const currentDate = new Date(date);
+
+	invoiceDate = setDateFormat(currentDate, 'dd/mm/yy');
 };
 
 const createProduct = event => {
@@ -255,10 +405,8 @@ const createProduct = event => {
 };
 
 const createOrder = () => {
-	const customerName = document.getElementById('customerName').value;
-	const customerIdCard = document.getElementById('customerIdCard').value;
 	try {
-		const customer = new Customer(customerName, customerIdCard);
+		const customer = new Customer(customerName.value, customerIdCard.value);
 
 		const invoice = new Invoice(customer, products, invoiceDate);
 		printInvoice(invoice);
@@ -269,7 +417,6 @@ const createOrder = () => {
 };
 
 const editProduct = e => {
-	console.log(e.target.id);
 	/* 	const product = products[index];
 	const form = document.getElementById('productForm');
 	form.name.value = product.name;
@@ -296,11 +443,12 @@ const renderProducts = () => {
 	let currentTotal = 0;
 	const calculateTotal = () => {
 		products.forEach(product => {
-			currentTotal += product.price * product.qty;
+			currentTotal += +product.price;
 		});
 		return currentTotal;
 	};
 
+	// <button class="btn btn-warning editProduct" id="${product.id}">Edit</button>
 	const productRows = products.map(
 		product => `
     <tr>
@@ -308,7 +456,7 @@ const renderProducts = () => {
       <td>${product.name}</td>
       <td>$${product.price}</td>
       <td>
-        <button class="btn btn-warning editProduct" id="${product.id}">Edit</button>
+        
         <button class="btn btn-danger deleteProduct" id="${product.id}">Delete</button>
       </td>
     </tr>
@@ -350,6 +498,49 @@ const renderProducts = () => {
 	});
 };
 
+const searchCiDB = async e => {
+	const searchValue = e.target.value;
+	const customersTable = 'Customers';
+
+	try {
+		const customer = await db.search(searchValue, 'ci', customersTable);
+		if (customer) {
+			const customerText = `${customer.full_name} ${customer.ci}`;
+
+			customerButtonSuggestion.setAttribute(
+				'data-fullName',
+				customer.full_name
+			);
+			customerButtonSuggestion.setAttribute('data-ci', customer.ci);
+			customerButtonSuggestion.innerHTML = customerText;
+		} else {
+			customerButtonSuggestion.innerHTML = ''; // Clear the element if no customer is found
+			customerButtonSuggestion.setAttribute('data-fullName', '');
+			customerButtonSuggestion.setAttribute('data-ci', '');
+
+			console.log('No customer found for search value:', searchValue);
+		}
+	} catch (err) {
+		console.error('Error searching for customer:', err);
+	}
+};
+
+const fillCustomerInputs = () => {
+	const customerSuggestion = customerButtonSuggestion.innerHTML;
+	console.log(customerSuggestion);
+	console.log('Fire!');
+	if (customerSuggestion !== '') {
+		console.log('Here');
+		const customerFullName =
+			customerButtonSuggestion.getAttribute('data-fullName');
+		const customerCi = customerButtonSuggestion.getAttribute('data-ci');
+		customerName.value = customerFullName;
+		customerIdCard.value = customerCi;
+	}
+};
+
+customerButtonSuggestion.addEventListener('click', fillCustomerInputs);
 dateInput.addEventListener('change', setDate);
 productForm.addEventListener('submit', createProduct);
 createOrderButton.addEventListener('click', createOrder);
+customerIdCard.addEventListener('keypress', searchCiDB);
