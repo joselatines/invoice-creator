@@ -40,6 +40,11 @@ name: the name of the product
 price: the price of the product
 qty: the quantity of the product
 
+## 💻 Installation 💻
+- Clone this project
+- Execute `npm install` to install dependencies
+- Then execute `npm run start` to start the app
+
 ## 🤖 Technologies 🤖
 ![JavaScript](https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E) 
 
